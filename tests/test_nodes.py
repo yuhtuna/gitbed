@@ -97,7 +97,7 @@ class TestNodes(unittest.TestCase):
 
         result = open_pr(state)
         self.assertEqual(result["pr_url"], "https://github.com/user/repo/pull/1")
-        mock_repo.create_file.assert_called_once()
+        self.assertEqual(mock_repo.create_file.call_count, 3)
         mock_repo.create_pull.assert_called_once()
 
 

@@ -7,6 +7,8 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_openai import ChatOpenAI
 
 from gitbed.bridge import BridgeCache
+from gitbed.conflict_checker import PinConflictChecker
+from gitbed.hal_sync import build_multi_file_patch_bundle
 from gitbed.state import AgentState
 from gitbed.utils import clean_code_block, verify_cpp_compilation
 
@@ -73,6 +75,7 @@ def verify_patch(state: AgentState) -> dict:
     code = state.get("updated_code", "")
     diff = state.get("diff_data", {})
     new_pin = diff.get("new_pin", "")
+    signal_name = diff.get("signal_name", "STATUS_LED")
 
     # 1. Compiler syntax verification
     valid, compile_err = verify_cpp_compilation(code)
@@ -87,12 +90,20 @@ def verify_patch(state: AgentState) -> dict:
         logger.warning(f"Verification failed: {err_msg}")
         return {"error_log": err_msg}
 
+    # 3. Hardware Pin Conflict Verification
+    checker = PinConflictChecker()
+    clean_conflict, conflict_errs = checker.check_code_conflicts(code, new_pin, signal_name)
+    if not clean_conflict:
+        err_msg = "Hardware Conflict error:\n" + "\n".join(conflict_errs)
+        logger.warning(f"Verification failed: {err_msg}")
+        return {"error_log": err_msg}
+
     logger.info("Verification passed successfully")
     return {"error_log": ""}
 
 
 def open_pr(state: AgentState) -> dict:
-    logger.info("Creating GitHub Pull Request")
+    logger.info("Creating GitHub Pull Request with Multi-File HAL Bundle")
     token = os.environ["GITHUB_TOKEN"]
     repo_name = os.environ["GITHUB_REPO"]
 
@@ -105,34 +116,50 @@ def open_pr(state: AgentState) -> dict:
     branch_name = f"hardware-sync-{random.randint(1000, 9999)}"
     repo.create_git_ref(ref=f"refs/heads/{branch_name}", sha=main_ref.commit.sha)
 
-    file_path = "pin_config.h"
-    commit_msg = f"chore(devops): update {file_path} hardware pin assignments"
-    content = state["updated_code"]
+    # Build multi-file HAL bundle
+    diff_data = state.get("diff_data", {})
+    updated_code = state.get("updated_code", "")
+    bundle = build_multi_file_patch_bundle(diff_data, updated_code)
 
-    try:
-        current_file = repo.get_contents(file_path, ref=branch_name)
-        repo.update_file(
-            path=file_path,
-            message=commit_msg,
-            content=content,
-            sha=current_file.sha,
-            branch=branch_name,
-        )
-    except Exception:
-        repo.create_file(
-            path=file_path,
-            message=commit_msg,
-            content=content,
-            branch=branch_name,
-        )
+    signal = diff_data.get("signal_name", "Pin Configuration")
+    old_pin = diff_data.get("old_pin", "N/A")
+    new_pin = diff_data.get("new_pin", "N/A")
 
-    signal = state["diff_data"].get("signal_name", "Pin Configuration")
-    old_pin = state["diff_data"].get("old_pin", "N/A")
-    new_pin = state["diff_data"].get("new_pin", "N/A")
+    for file_path, content in bundle.items():
+        commit_msg = f"chore(devops): update {file_path} for {signal} pin reassignment"
+        try:
+            current_file = repo.get_contents(file_path, ref=branch_name)
+            repo.update_file(
+                path=file_path,
+                message=commit_msg,
+                content=content,
+                sha=current_file.sha,
+                branch=branch_name,
+            )
+            logger.info(f"Updated {file_path} in branch {branch_name}")
+        except Exception:
+            repo.create_file(
+                path=file_path,
+                message=commit_msg,
+                content=content,
+                branch=branch_name,
+            )
+            logger.info(f"Created {file_path} in branch {branch_name}")
+
+    pr_body = (
+        f"## 🤖 GitBed DevOps Bot - Multi-File HAL Sync\n\n"
+        f"**Signal Name:** `{signal}`\n"
+        f"**Pin Reassignment:** `{old_pin}` ➡️ `{new_pin}`\n\n"
+        f"### Files Updated\n"
+        f"- `pin_config.h` (C/C++ Macro Header)\n"
+        f"- `boards/app.overlay` (Zephyr DeviceTree Overlay)\n"
+        f"- `src/gpio_driver.cpp` (GPIO Driver Init Function)\n\n"
+        f"✅ Static compiler verification & Pin conflict check passed."
+    )
 
     pr = repo.create_pull(
-        title=f"Hardware Netlist Sync: {signal}",
-        body=f"Automated hardware patch for signal `{signal}`: `{old_pin}` -> `{new_pin}`.",
+        title=f"Hardware Netlist Sync: {signal} ({old_pin} -> {new_pin})",
+        body=pr_body,
         head=branch_name,
         base=base_branch,
     )
