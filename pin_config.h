@@ -6,6 +6,6 @@
 #define UART_TX_PIN PA9
 #define UART_RX_PIN PA10
 
-void init_pins();
+void init_pins(void);
 
 #endif // PIN_CONFIG_H
