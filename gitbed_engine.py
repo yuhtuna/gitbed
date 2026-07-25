@@ -24,22 +24,23 @@ logger = logging.getLogger("gitbed")
 
 def main():
     repo_name = os.environ.get("GITHUB_REPO", "")
-    if not repo_name or repo_name == "username/repository_name":
-        repo_name = get_default_repo()
-        if repo_name:
-            os.environ["GITHUB_REPO"] = repo_name
+    if not repo_name or "username/" in repo_name or "your_" in repo_name:
+        detected_repo = get_default_repo()
+        if detected_repo:
+            os.environ["GITHUB_REPO"] = detected_repo
 
     token = os.environ.get("GITHUB_TOKEN", "")
-    if not token or token == "your_github_personal_access_token_here":
-        token = get_default_token()
-        if token:
-            os.environ["GITHUB_TOKEN"] = token
+    if not token or "your_" in token or token.startswith("github_pat_antigravity"):
+        gh_token = get_default_token()
+        if gh_token:
+            os.environ["GITHUB_TOKEN"] = gh_token
+            token = gh_token
 
     required_env = ["GITHUB_TOKEN", "OPENAI_API_KEY", "GITHUB_REPO"]
     missing = [var for var in required_env if not os.environ.get(var) or "your_" in os.environ.get(var, "")]
     if missing:
-        logger.error(f"Missing required environment variables: {', '.join(missing)}")
-        logger.info("Please set GITHUB_TOKEN, OPENAI_API_KEY, and GITHUB_REPO in your .env file or environment.")
+        logger.error(f"Missing required environment variable(s): {', '.join(missing)}")
+        logger.info("Provide keys in your .env file or authenticate via 'gh auth login'.")
         sys.exit(1)
 
     diff_path = "mock_diff.json"
