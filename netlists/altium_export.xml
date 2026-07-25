@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Netlist Version="1.0" Designer="Altium Designer">
+  <Net Name="STATUS_LED">
+    <Node ComponentRef="U1" Pin="7"/>
+    <Node ComponentRef="D1" Pin="1"/>
+  </Net>
+  <Net Name="UART_TX">
+    <Node ComponentRef="U1" Pin="9"/>
+    <Node ComponentRef="J1" Pin="2"/>
+  </Net>
+  <Net Name="UART_RX">
+    <Node ComponentRef="U1" Pin="10"/>
+    <Node ComponentRef="J1" Pin="3"/>
+  </Net>
+</Netlist>

@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+import argparse
 import json
 import logging
 import os
@@ -13,6 +13,7 @@ except ImportError:
 from gitbed.graph import build_graph
 from gitbed.state import AgentState
 from gitbed.utils import fetch_github_file, get_default_repo, get_default_token
+from gitbed.watcher import process_netlist_file, watch_netlists_directory
 
 logging.basicConfig(
     level=logging.INFO,
@@ -22,35 +23,7 @@ logging.basicConfig(
 logger = logging.getLogger("gitbed")
 
 
-def main():
-    repo_name = os.environ.get("GITHUB_REPO", "")
-    if not repo_name or "username/" in repo_name or "your_" in repo_name:
-        detected_repo = get_default_repo()
-        if detected_repo:
-            os.environ["GITHUB_REPO"] = detected_repo
-
-    token = os.environ.get("GITHUB_TOKEN", "")
-    if not token or "your_" in token or token.startswith("github_pat_antigravity"):
-        gh_token = get_default_token()
-        if gh_token:
-            os.environ["GITHUB_TOKEN"] = gh_token
-            token = gh_token
-
-    required_env = ["GITHUB_TOKEN", "OPENAI_API_KEY", "GITHUB_REPO"]
-    missing = [var for var in required_env if not os.environ.get(var) or "your_" in os.environ.get(var, "")]
-    if missing:
-        logger.error(f"Missing required environment variable(s): {', '.join(missing)}")
-        logger.info("Provide keys in your .env file or authenticate via 'gh auth login'.")
-        sys.exit(1)
-
-    diff_path = "mock_diff.json"
-    if not os.path.exists(diff_path):
-        logger.error(f"Diff file '{diff_path}' not found")
-        sys.exit(1)
-
-    with open(diff_path, "r", encoding="utf-8") as f:
-        diff_data = json.load(f)
-
+def run_pipeline_for_diff(diff_data: dict):
     repo_name = os.environ["GITHUB_REPO"]
     token = os.environ["GITHUB_TOKEN"]
 
@@ -89,6 +62,54 @@ def main():
         logger.info(f"Workflow completed successfully. PR URL: {pr_url}")
     else:
         logger.error("Workflow failed to create Pull Request")
+
+
+def main():
+    parser = argparse.ArgumentParser(description="GitBed: Automated Hardware Netlist Sync & Firmware Patch Engine")
+    parser.add_argument("--altium", type=str, help="Path to Altium Designer XML or report netlist file")
+    parser.add_argument("--kicad", type=str, help="Path to KiCad .net netlist file")
+    parser.add_argument("--watch", type=str, help="Directory path to monitor for Altium/KiCad exports")
+    args = parser.parse_args()
+
+    repo_name = os.environ.get("GITHUB_REPO", "")
+    if not repo_name or "username/" in repo_name or "your_" in repo_name:
+        detected_repo = get_default_repo()
+        if detected_repo:
+            os.environ["GITHUB_REPO"] = detected_repo
+
+    token = os.environ.get("GITHUB_TOKEN", "")
+    if not token or "your_" in token or token.startswith("github_pat_antigravity"):
+        gh_token = get_default_token()
+        if gh_token:
+            os.environ["GITHUB_TOKEN"] = gh_token
+
+    required_env = ["GITHUB_TOKEN", "OPENAI_API_KEY", "GITHUB_REPO"]
+    missing = [var for var in required_env if not os.environ.get(var) or "your_" in os.environ.get(var, "")]
+    if missing:
+        logger.error(f"Missing required environment variable(s): {', '.join(missing)}")
+        logger.info("Provide keys in your .env file or authenticate via 'gh auth login'.")
+        sys.exit(1)
+
+    if args.watch:
+        watch_netlists_directory(args.watch, run_pipeline_for_diff)
+        return
+
+    diff_data = None
+    if args.altium:
+        diff_data = process_netlist_file(args.altium)
+    elif args.kicad:
+        diff_data = process_netlist_file(args.kicad)
+    else:
+        diff_path = "mock_diff.json"
+        if os.path.exists(diff_path):
+            with open(diff_path, "r", encoding="utf-8") as f:
+                diff_data = json.load(f)
+
+    if not diff_data:
+        logger.error("No valid netlist diff data provided or parsed.")
+        sys.exit(1)
+
+    run_pipeline_for_diff(diff_data)
 
 
 if __name__ == "__main__":
