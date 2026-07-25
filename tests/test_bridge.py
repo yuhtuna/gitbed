@@ -1,6 +1,6 @@
 import os
 import unittest
-from gitbed.bridge import BridgeCache
+from gitbed.bridge import BridgeCache, DEFAULT_RULES
 
 
 class TestBridgeCache(unittest.TestCase):
