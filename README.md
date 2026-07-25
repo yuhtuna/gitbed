@@ -1,10 +1,39 @@
-# GitBed: Automated Hardware Netlist Sync & Firmware Patch Engine
+# GitBed (Community Edition)
 
-GitBed is an automated DevOps pipeline designed for embedded systems engineering. It ingests hardware netlist specification diffs, generates appropriate C/C++ hardware abstraction layer patches using LLM capabilities, validates code correctness using local compiler checks, and automatically manages Git branching and Pull Request creation on GitHub.
+Automated hardware-to-software CI/CD agent.
+
+GitBed listens for Altium/KiCad netlist changes and automatically generates verified C++ Pull Requests to keep firmware in sync with hardware.
 
 ---
 
-## Architecture and System Flow
+[ 🔗 Insert your 90-second Loom Demo Video Link Here ]
+
+---
+
+## 🚀 Quickstart (Run Locally)
+
+```bash
+git clone https://github.com/yuhtuna/gitbed.git
+cd gitbed
+
+pip install -r requirements.txt
+
+export OPENAI_API_KEY="your_key"
+export GITHUB_TOKEN="your_token"
+export GITHUB_REPO="yuhtuna/gitbed"
+
+python gitbed_engine.py
+```
+
+---
+
+## 🏢 GitBed Enterprise
+
+The Community Edition runs strictly locally. For Enterprise teams requiring Zero Data Retention (ZDR), SOC 2 compliance, and Hardware-in-the-Loop (HIL) server integrations, join the Alpha waitlist.
+
+---
+
+## System Architecture
 
 The workflow is modeled as a stateful directed graph using LangGraph. It incorporates an automated reflection loop to catch compilation or specification errors and prompt the LLM for corrections before creating pull requests.
 
@@ -32,7 +61,7 @@ The workflow is modeled as a stateful directed graph using LangGraph. It incorpo
                  v
        +-------------------+
        |        END        |
-       +-------------------+
+       +---------+---------+
 ```
 
 ### Core Pipeline Components
@@ -49,7 +78,7 @@ The workflow is modeled as a stateful directed graph using LangGraph. It incorpo
    - **Specification Verification:** Checks that newly reassigned pin declarations from the netlist diff are explicitly present in the patch.
 
 4. **Reflection Router (`route_verification`)**
-   Evaluates error status. If syntax or specification errors are present and attempts are below the threshold of 3, control loops back to `generate_patch` with compiler diagnostics included in the LLM context.
+   Evaluates error status. If syntax or specification errors are present and attempts are below 3, control loops back to `generate_patch` with compiler diagnostics included in the LLM context.
 
 5. **GitHub Pull Request Automation (`open_pr`)**
    Uses `PyGithub` to connect to the target repository, create an isolated feature branch (`hardware-sync-<id>`), commit updated header files, and submit a Pull Request.
@@ -66,83 +95,20 @@ gitbed/
 │   ├── utils.py         # Code formatting, GCC invocation, and GitHub content fetchers
 │   ├── nodes.py         # Node implementations (generate_patch, verify_patch, open_pr)
 │   └── graph.py         # StateGraph workflow assembly and routing logic
+├── tests/               # Unit and integration test suite
 ├── gitbed_engine.py     # Main application entry point and logging configuration
 ├── mock_diff.json       # Input hardware netlist diff specification
-├── .gitignore           # Git ignore rules for Python artifacts
+├── requirements.txt     # Python package dependencies
+├── .gitignore           # Git ignore rules for Python artifacts and secrets
 └── README.md            # System documentation
 ```
 
 ---
 
-## Prerequisites
+## Testing
 
-- **Python:** 3.10 or higher
-- **C++ Compiler:** `g++` (GCC) or `clang` accessible in system `PATH`
-- **Dependencies:** `pygithub`, `langchain-openai`, `langgraph`, `typing_extensions`
+Run the automated test suite using `pytest`:
 
----
-
-## Environment Configuration
-
-Configure the following environment variables prior to running the engine:
-
-| Variable Name | Description | Example |
-| :--- | :--- | :--- |
-| `GITHUB_TOKEN` | GitHub Personal Access Token with repository write permissions | `ghp_xxxxxxxxxxxx` |
-| `OPENAI_API_KEY` | OpenAI API key for `gpt-4o` invocation | `sk-proj-xxxxxxxx` |
-| `GITHUB_REPO` | Target GitHub repository (owner/name format) | `yuhtuna/gitbed` |
-
-### Setting Environment Variables
-
-#### On Linux / macOS:
 ```bash
-export GITHUB_TOKEN="your_github_token"
-export OPENAI_API_KEY="your_openai_api_key"
-export GITHUB_REPO="owner/repository"
-```
-
-#### On Windows (PowerShell):
-```powershell
-$env:GITHUB_TOKEN="your_github_token"
-$env:OPENAI_API_KEY="your_openai_api_key"
-$env:GITHUB_REPO="owner/repository"
-```
-
----
-
-## Installation and Execution
-
-1. **Install Dependencies**
-
-   ```bash
-   pip install pygithub langchain-openai langgraph typing-extensions
-   ```
-
-2. **Run the Engine**
-
-   Execute the main entry script from the project root:
-
-   ```bash
-   python gitbed_engine.py
-   ```
-
----
-
-## Logging and Diagnostics
-
-The engine outputs structured logs using Python's standard `logging` module.
-
-Sample output format:
-
-```text
-00:42:10 [INFO] gitbed: Loaded netlist diff: STATUS_LED (PB6 -> PB7)
-00:42:11 [INFO] gitbed: Fetched pin_config.h from GitHub repo 'yuhtuna/gitbed'
-00:42:11 [INFO] gitbed: Starting GitBed agent pipeline
-00:42:11 [INFO] gitbed.nodes: Generating C++ patch (attempt 1)
-00:42:13 [INFO] gitbed.nodes: Verifying C++ patch with compiler and specification check
-00:42:13 [INFO] gitbed.nodes: Verification passed successfully
-00:42:13 [INFO] gitbed.graph: Routing to open_pr
-00:42:13 [INFO] gitbed.nodes: Creating GitHub Pull Request
-00:42:15 [INFO] gitbed.nodes: Pull Request opened: https://github.com/yuhtuna/gitbed/pull/12
-00:42:15 [INFO] gitbed: Workflow completed successfully. PR URL: https://github.com/yuhtuna/gitbed/pull/12
+pytest -v
 ```

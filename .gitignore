@@ -28,6 +28,7 @@ ENV/
 
 # Environment Variables
 .env
+.env.*
 .env.local
 
 # IDEs

@@ -1,0 +1,5 @@
+pygithub>=2.0.0
+langchain-openai>=0.1.0
+langgraph>=0.1.0
+typing-extensions>=4.0.0
+pytest>=8.0.0
