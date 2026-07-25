@@ -26,6 +26,28 @@ python gitbed_engine.py
 
 ---
 
+## 🔌 Altium Designer Integration Modes
+
+GitBed connects with Altium Designer through three seamless methods without requiring manual parsing:
+
+### 1. Automated OutJob Export (Recommended / Zero-Code)
+1. In Altium Designer, open your project's Output Job File (`.OutJob`).
+2. Add a **Netlist Outputs -> Export Netlist** generator targeting `Project Outputs/Netlist.xml`.
+3. Start GitBed in watcher mode targeting your Altium project output directory:
+   ```bash
+   python gitbed_engine.py --watch "C:/AltiumProjects/MyBoard/Project Outputs/"
+   ```
+4. Every time you save your PCB or schematic in Altium, GitBed automatically detects netlist changes and opens a verified C++ Pull Request.
+
+### 2. Altium Native Script Hook ([altium/GitBed_Export_Hook.py](file:///c:/Users/tuant/Downloads/HKT/gitbed/altium/GitBed_Export_Hook.py))
+- Add [altium/GitBed_Export_Hook.py](file:///c:/Users/tuant/Downloads/HKT/gitbed/altium/GitBed_Export_Hook.py) to your Altium Designer Scripts folder.
+- Execute `SyncWithGitBed` inside Altium Designer to trigger instantaneous netlist extraction and GitHub PR creation.
+
+### 3. Altium 365 Cloud Webhooks
+For Altium 365 cloud workspaces, configure Webhook notifications on `Project Release` or `Netlist Modified` events to trigger GitBed's server pipeline headlessly.
+
+---
+
 ## 🏢 GitBed Enterprise
 
 The Community Edition runs strictly locally. For Enterprise teams requiring Zero Data Retention (ZDR), SOC 2 compliance, and Hardware-in-the-Loop (HIL) server integrations, join the Alpha waitlist.
