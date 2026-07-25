@@ -6,10 +6,6 @@ GitBed listens for Altium/KiCad netlist changes and automatically generates veri
 
 ---
 
-[ 🔗 Insert your 90-second Loom Demo Video Link Here ]
-
----
-
 ## 🚀 Quickstart (Run Locally)
 
 ```bash
@@ -87,6 +83,9 @@ The workflow is modeled as a stateful directed graph using LangGraph. It incorpo
 
 ### Core Pipeline Components
 
+1. **State Schema (`AgentState`)**
+   Maintains system context across node executions, including `diff_data`, `original_code`, `updated_code`, `error_log`, attempt counts, and resulting PR URL.
+
 2. **Deterministic-First Patch Generation (`generate_patch` & `BridgeCache`)**
    Attempts zero-cost deterministic rule execution using cached bridge rules (`.gitbed_rules.json`). Only falls back to `gpt-4o-mini` synthesis on cache misses, caching new rules upon successful compilation.
 
@@ -116,6 +115,8 @@ The workflow is modeled as a stateful directed graph using LangGraph. It incorpo
 gitbed/
 ├── .github/workflows/
 │   └── gitbed-sync.yml  # GitHub Actions CI/CD workflow template
+├── altium/
+│   └── GitBed_Export_Hook.py # Altium Designer native script hook
 ├── gitbed/
 │   ├── __init__.py      # Package initialization
 │   ├── bridge.py        # Self-Synthesizing Bridge Cache Engine
@@ -125,11 +126,9 @@ gitbed/
 │   ├── state.py         # AgentState schema definition
 │   ├── utils.py         # Code formatting, GCC invocation, and GitHub content fetchers
 │   ├── nodes.py         # Node implementations (generate_patch, verify_patch, open_pr)
+│   ├── watcher.py       # Altium/KiCad live directory watcher
 │   └── graph.py         # StateGraph workflow assembly and routing logic
-│   ├── state.py         # AgentState schema definition
-│   ├── utils.py         # Code formatting, GCC invocation, and GitHub content fetchers
-│   ├── nodes.py         # Node implementations (generate_patch, verify_patch, open_pr)
-│   └── graph.py         # StateGraph workflow assembly and routing logic
+├── netlists/            # Sample Altium XML netlist exports
 ├── tests/               # 26 automated unit and integration tests
 ├── gitbed_engine.py     # Main application entry point and logging configuration
 ├── mock_diff.json       # Input hardware netlist diff specification
