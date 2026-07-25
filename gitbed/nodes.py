@@ -6,6 +6,7 @@ from github import Github
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_openai import ChatOpenAI
 
+from gitbed.bridge import BridgeCache
 from gitbed.state import AgentState
 from gitbed.utils import clean_code_block, verify_cpp_compilation
 
@@ -16,9 +17,24 @@ def generate_patch(state: AgentState) -> dict:
     attempts = state.get("attempts", 0) + 1
     logger.info(f"Generating C++ patch (attempt {attempts})")
 
-    diff_json = json.dumps(state.get("diff_data", {}), indent=2)
+    diff_data = state.get("diff_data", {})
     original_code = state.get("original_code", "")
     error_log = state.get("error_log", "")
+
+    # 1. Check Deterministic Bridge Cache
+    if not error_log:
+        cache = BridgeCache()
+        success, deterministic_code, rule_id = cache.apply_rules(original_code, diff_data)
+        if success:
+            logger.info(f"Cache HIT: Applied deterministic bridge rule '{rule_id}' (0ms, $0 AI cost)")
+            return {
+                "updated_code": deterministic_code,
+                "attempts": attempts,
+            }
+
+    # 2. AI Synthesizer Fallback
+    logger.info("Cache MISS: Invoking AI engine to synthesize C++ patch")
+    diff_json = json.dumps(diff_data, indent=2)
 
     system_prompt = (
         "You are an embedded C/C++ engineer updating hardware pin configurations (`pin_config.h`).\n"
