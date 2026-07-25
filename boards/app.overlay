@@ -1,0 +1,10 @@
+// Auto-generated Zephyr DeviceTree Overlay by GitBed
+/ {
+    leds {
+        compatible = "gpio-leds";
+        status_led_led: status_led {
+            gpios = <&gpiob 7 GPIO_ACTIVE_HIGH>;
+            label = "System Status LED";
+        };
+    };
+};
