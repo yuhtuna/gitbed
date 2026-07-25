@@ -18,9 +18,8 @@ cd gitbed
 
 pip install -r requirements.txt
 
-export OPENAI_API_KEY="your_key"
-export GITHUB_TOKEN="your_token"
-export GITHUB_REPO="yuhtuna/gitbed"
+# Copy environment variables template and configure your keys
+cp .env.example .env
 
 python gitbed_engine.py
 ```

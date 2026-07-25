@@ -4,6 +4,12 @@ import logging
 import os
 import sys
 
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
+
 from gitbed.graph import build_graph
 from gitbed.state import AgentState
 from gitbed.utils import fetch_github_file
