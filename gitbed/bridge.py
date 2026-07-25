@@ -40,17 +40,37 @@ class BridgeCache:
 
     def _load_cache(self):
         self.rules = list(DEFAULT_RULES)
-        if os.path.exists(self.cache_file):
-            try:
-                with open(self.cache_file, "r", encoding="utf-8") as f:
-                    custom_rules = json.load(f)
-                    for rule in custom_rules:
-                        if rule not in self.rules:
-                            self.rules.append(rule)
-                logger.info(f"Loaded {len(self.rules)} bridge rules from '{self.cache_file}'")
-            except Exception as exc:
-                logger.warning(f"Could not load bridge cache file: {exc}")
+        if not os.path.exists(self.cache_file):
+            return
 
+        try:
+            with open(self.cache_file, "r", encoding="utf-8") as f:
+                custom_rules = json.load(f)
+        except Exception as exc:
+            logger.warning(f"Could not load bridge cache file: {exc}")
+            return
+
+        if not isinstance(custom_rules, list):
+            logger.warning(
+                f"Bridge cache file '{self.cache_file}' must contain a JSON list; got {type(custom_rules).__name__}"
+            )
+            return
+
+        existing_rule_ids = {r.get("rule_id") for r in self.rules if isinstance(r, dict)}
+        for rule in custom_rules:
+            if not isinstance(rule, dict):
+                continue
+
+            rule_id = rule.get("rule_id")
+            if not rule_id or rule_id in existing_rule_ids:
+                continue
+            if not rule.get("match_pattern") or not rule.get("replace_pattern"):
+                continue
+
+            self.rules.append(rule)
+            existing_rule_ids.add(rule_id)
+
+        logger.info(f"Loaded {len(self.rules)} bridge rules from '{self.cache_file}'")
     def save_cache(self):
         try:
             with open(self.cache_file, "w", encoding="utf-8") as f:
