@@ -104,6 +104,10 @@ gitbed/
 │   ├── utils.py         # Code formatting, GCC invocation, and GitHub content fetchers
 │   ├── nodes.py         # Node implementations (generate_patch, verify_patch, open_pr)
 │   └── graph.py         # StateGraph workflow assembly and routing logic
+│   ├── state.py         # AgentState schema definition
+│   ├── utils.py         # Code formatting, GCC invocation, and GitHub content fetchers
+│   ├── nodes.py         # Node implementations (generate_patch, verify_patch, open_pr)
+│   └── graph.py         # StateGraph workflow assembly and routing logic
 ├── tests/               # 26 automated unit and integration tests
 ├── gitbed_engine.py     # Main application entry point and logging configuration
 ├── mock_diff.json       # Input hardware netlist diff specification
