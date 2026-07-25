@@ -35,7 +35,9 @@ def generate_patch(state: AgentState) -> dict:
     if error_log:
         user_prompt += f"\nPrevious Error:\n{error_log}\nFix the error above."
 
-    llm = ChatOpenAI(model="gpt-4o", temperature=0.1)
+    model_name = os.environ.get("OPENAI_MODEL", "gpt-4o-mini")
+    logger.info(f"Using OpenAI model: {model_name}")
+    llm = ChatOpenAI(model=model_name, temperature=0.1, max_tokens=500)
     response = llm.invoke([
         SystemMessage(content=system_prompt),
         HumanMessage(content=user_prompt),
