@@ -44,3 +44,36 @@ def fetch_github_file(repo_name: str, token: str, file_path: str) -> str:
     branch = repo.default_branch
     content = repo.get_contents(file_path, ref=branch)
     return content.decoded_content.decode("utf-8")
+
+
+def get_default_repo() -> str:
+    try:
+        res = subprocess.run(
+            ["git", "remote", "get-url", "origin"],
+            capture_output=True,
+            text=True,
+        )
+        url = res.stdout.strip()
+        match = re.search(r"github\.com[:/]([^/]+/[^/.]+)(?:\.git)?", url)
+        if match:
+            return match.group(1)
+    except Exception:
+        pass
+    return ""
+
+
+def get_default_token() -> str:
+    import os
+    env = {k: v for k, v in os.environ.items() if k != "GITHUB_TOKEN"}
+    try:
+        res = subprocess.run(
+            ["gh", "auth", "token"],
+            capture_output=True,
+            text=True,
+            env=env,
+        )
+        if res.returncode == 0 and res.stdout.strip():
+            return res.stdout.strip()
+    except Exception:
+        pass
+    return ""

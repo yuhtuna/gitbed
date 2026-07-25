@@ -12,7 +12,7 @@ except ImportError:
 
 from gitbed.graph import build_graph
 from gitbed.state import AgentState
-from gitbed.utils import fetch_github_file
+from gitbed.utils import fetch_github_file, get_default_repo, get_default_token
 
 logging.basicConfig(
     level=logging.INFO,
@@ -23,10 +23,23 @@ logger = logging.getLogger("gitbed")
 
 
 def main():
+    repo_name = os.environ.get("GITHUB_REPO", "")
+    if not repo_name or repo_name == "username/repository_name":
+        repo_name = get_default_repo()
+        if repo_name:
+            os.environ["GITHUB_REPO"] = repo_name
+
+    token = os.environ.get("GITHUB_TOKEN", "")
+    if not token or token == "your_github_personal_access_token_here":
+        token = get_default_token()
+        if token:
+            os.environ["GITHUB_TOKEN"] = token
+
     required_env = ["GITHUB_TOKEN", "OPENAI_API_KEY", "GITHUB_REPO"]
-    missing = [var for var in required_env if not os.environ.get(var)]
+    missing = [var for var in required_env if not os.environ.get(var) or "your_" in os.environ.get(var, "")]
     if missing:
         logger.error(f"Missing required environment variables: {', '.join(missing)}")
+        logger.info("Please set GITHUB_TOKEN, OPENAI_API_KEY, and GITHUB_REPO in your .env file or environment.")
         sys.exit(1)
 
     diff_path = "mock_diff.json"
