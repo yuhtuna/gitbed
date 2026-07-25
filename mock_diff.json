@@ -1,0 +1,9 @@
+{
+  "netlist_version": "v2.1.0",
+  "component": "MCU_GPIO_HEADER",
+  "change_type": "PIN_REASSIGNMENT",
+  "signal_name": "STATUS_LED",
+  "old_pin": "PB6",
+  "new_pin": "PB7",
+  "description": "Reassigned STATUS_LED output driver pin from PB6 to PB7 due to trace routing conflict on PCB Rev B."
+}
