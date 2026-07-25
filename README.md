@@ -68,8 +68,8 @@ The workflow is modeled as a stateful directed graph using LangGraph. It incorpo
 1. **State Schema (`AgentState`)**
    Maintains system context across node executions, including `diff_data`, `original_code`, `updated_code`, `error_log`, attempt counts, and resulting PR URL.
 
-2. **Patch Generation (`generate_patch`)**
-   Invokes `gpt-4o` using structured system constraints to produce pure C++ header configurations (`pin_config.h`) derived from the hardware netlist diff.
+2. **Deterministic-First Patch Generation (`generate_patch` & `BridgeCache`)**
+   Attempts zero-cost deterministic rule execution using cached bridge rules (`.gitbed_rules.json`). Only falls back to `gpt-4o-mini` synthesis on cache misses.
 
 3. **Compiler & Spec Verification (`verify_patch`)**
    Executes a multi-stage validation:
@@ -90,6 +90,7 @@ The workflow is modeled as a stateful directed graph using LangGraph. It incorpo
 gitbed/
 ├── gitbed/
 │   ├── __init__.py      # Package initialization
+│   ├── bridge.py        # Self-Synthesizing Bridge Cache Engine
 │   ├── state.py         # AgentState schema definition
 │   ├── utils.py         # Code formatting, GCC invocation, and GitHub content fetchers
 │   ├── nodes.py         # Node implementations (generate_patch, verify_patch, open_pr)
