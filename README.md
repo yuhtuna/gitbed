@@ -69,7 +69,7 @@ The workflow is modeled as a stateful directed graph using LangGraph. It incorpo
    Maintains system context across node executions, including `diff_data`, `original_code`, `updated_code`, `error_log`, attempt counts, and resulting PR URL.
 
 2. **Deterministic-First Patch Generation (`generate_patch` & `BridgeCache`)**
-   Attempts zero-cost deterministic rule execution using cached bridge rules (`.gitbed_rules.json`). Only falls back to `gpt-4o-mini` synthesis on cache misses, caching new rules upon successful compilation.
+   Attempts zero-cost deterministic rule execution using cached bridge rules (`.gitbed_rules.json`). Only falls back to `gpt-4o-mini` synthesis on cache misses.
 
 3. **Compiler & Spec Verification (`verify_patch`)**
    Executes a multi-stage validation:
