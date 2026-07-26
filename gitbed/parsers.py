@@ -49,16 +49,31 @@ def parse_altium_netlist(xml_content: str) -> List[Dict[str, Any]]:
                     })
     except Exception as exc:
         logger.warning(f"Altium XML parse fallback to regex: {exc}")
-        # Regex fallback for text/rpt format
+        # Regex fallback for Protel format: ( \n NetName \n Node1-Pin1 \n )
+        protel_blocks = re.findall(r"\(\s*\n\s*([\w]+)\s*\n(.*?)\n\)", xml_content, re.DOTALL)
+        for net_name, nodes_block in protel_blocks:
+            nodes = re.findall(r"([\w]+)-([\w]+)", nodes_block)
+            for ref, pin in nodes:
+                if net_name and "GND" not in net_name and "VCC" not in net_name:
+                    diffs.append({
+                        "component": ref,
+                        "signal_name": net_name,
+                        "new_pin": f"P{pin}" if not pin.startswith("P") else pin,
+                        "change_type": "ALTIUM_NETLIST_SYNC",
+                        "description": f"Parsed Protel entry for {net_name}",
+                    })
+
+        # Regex fallback for Report text format
         matches = re.findall(r"Net\s+(\w+)\s+Node\s+(\w+)-(\w+)", xml_content)
         for net_name, ref, pin in matches:
-            diffs.append({
-                "component": ref,
-                "signal_name": net_name,
-                "new_pin": f"P{pin}" if not pin.startswith("P") else pin,
-                "change_type": "ALTIUM_NETLIST_SYNC",
-                "description": f"Parsed Altium report entry for {net_name}",
-            })
+            if net_name and "GND" not in net_name and "VCC" not in net_name:
+                diffs.append({
+                    "component": ref,
+                    "signal_name": net_name,
+                    "new_pin": f"P{pin}" if not pin.startswith("P") else pin,
+                    "change_type": "ALTIUM_NETLIST_SYNC",
+                    "description": f"Parsed Altium report entry for {net_name}",
+                })
 
     logger.info(f"Parsed {len(diffs)} signal nets from Altium netlist data")
     return diffs
