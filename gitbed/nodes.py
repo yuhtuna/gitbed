@@ -116,10 +116,19 @@ def open_pr(state: AgentState) -> dict:
     branch_name = f"hardware-sync-{random.randint(1000, 9999)}"
     repo.create_git_ref(ref=f"refs/heads/{branch_name}", sha=main_ref.commit.sha)
 
-    # Build multi-file HAL bundle
+    # Build multi-file HAL bundle with existing content merging
     diff_data = state.get("diff_data", {})
     updated_code = state.get("updated_code", "")
-    bundle = build_multi_file_patch_bundle(diff_data, updated_code)
+
+    existing_files = {}
+    for path in ["boards/app.overlay", "src/gpio_driver.cpp"]:
+        try:
+            current_f = repo.get_contents(path, ref=base_branch)
+            existing_files[path] = current_f.decoded_content.decode("utf-8")
+        except Exception:
+            pass
+
+    bundle = build_multi_file_patch_bundle(diff_data, updated_code, existing_files)
 
     signal = diff_data.get("signal_name", "Pin Configuration")
     old_pin = diff_data.get("old_pin", "N/A")
