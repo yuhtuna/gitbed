@@ -1,5 +1,5 @@
 @echo off
 echo Starting GitBed Live Demo Watcher...
 echo Monitoring Altium Kame_PDB export directory...
-C:\Users\tuant\miniconda3\python.exe gitbed_engine.py --watch "C:\Users\Public\Documents\Altium\Sample - Kame_PDB\Project Outputs"
+C:\Users\tuant\miniconda3\python.exe gitbed_engine.py --watch "C:\Users\Public\Documents\Altium\Sample - Kame_PDB\Project Outputs for Sample - Kame_PDB"
 pause
