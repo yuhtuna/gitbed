@@ -51,37 +51,35 @@ def process_netlist_file(file_path: str) -> Optional[dict]:
         logger.warning(f"No valid signal data parsed from '{file_path}'")
         return None
 
-    logger.info(f"Parsed {len(diffs)} total nets from EDA export")
+    # 1. Ignore auto-generated nets (Net...) and passive components (Resistors, Capacitors, Diodes)
+    diffs = [
+        d for d in diffs
+        if not d["signal_name"].startswith("Net")
+        and not d["component"].startswith(("R", "C", "D"))
+    ]
+
+    logger.info(f"Parsed {len(diffs)} IC/Connector signal nets from EDA export")
 
     # Load current firmware pin assignments from GitHub
     baseline = _load_baseline_pins()
     if not baseline:
         logger.warning("No baseline firmware found on GitHub. Returning first parsed net.")
-        return diffs[0]
+        return diffs[0] if diffs else None
 
-    # Deterministic signal aliases for Altium auto-generated net names
-    NET_ALIASES = {
-        "NetR13_1": "INA_SDA",
-        "NetR12_1": "INA_SCL",
-        "NetR8_1": "ESC_EN",
-    }
-
-    # Compare: find nets where the pin ACTUALLY changed vs the firmware
-    # We sort to prioritize Microcontroller pins (U) over Connector pins (CN) so the PR reflects the main IC pin
+    # 2. Prioritize Microcontrollers (U) over Connectors (CN/J)
     diffs.sort(key=lambda d: 0 if d["component"].startswith("U") else (1 if d["component"].startswith("CN") else 2))
 
+    # 3. Compare against baseline to find true IC pin changes
     for d in diffs:
-        raw_signal = d["signal_name"]
-        signal = NET_ALIASES.get(raw_signal, raw_signal)
-        d["signal_name"] = signal  # Normalize signal name
+        signal = d["signal_name"]
         new_pin = d["new_pin"]
 
         if signal in baseline and baseline[signal] != new_pin:
             d["old_pin"] = baseline[signal]
-            logger.info(f"Detected real pin change: {signal} ({raw_signal}) moved from {baseline[signal]} -> {new_pin} (component: {d['component']})")
+            logger.info(f"Detected real IC pin change: {signal} moved from {baseline[signal]} -> {new_pin} (component: {d['component']})")
             return d
 
-    logger.info(f"All {len(diffs)} parsed nets match the current firmware baseline. No firmware update required.")
+    logger.info(f"All IC/Connector nets match current firmware baseline ({len(baseline)} tracked signals). No firmware update required.")
     return None
 
 
