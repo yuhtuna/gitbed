@@ -39,11 +39,13 @@ def generate_patch(state: AgentState) -> dict:
     diff_json = json.dumps(diff_data, indent=2)
 
     system_prompt = (
-        "You are an embedded C/C++ engineer updating hardware pin configurations (`pin_config.h`).\n"
+        "You are an embedded C/C++ hardware engineer updating hardware pin configurations (`pin_config.h`).\n"
         "Rules:\n"
         "1. Output valid C++ header code ONLY.\n"
-        "2. Update pin constants matching the hardware netlist diff.\n"
-        "3. Keep all include guards and formatting."
+        "2. You are provided with the full hardware net topology (`connected_nodes`).\n"
+        "3. ALWAYS target the primary microcontroller / IC pin (component 'U' or 'IC') for firmware `#define SIGNAL_PIN` macros.\n"
+        "4. Ignore passive pull-up/pull-down resistor pins (component 'R') and decoupling capacitors ('C') when determining the macro pin value.\n"
+        "5. Keep all include guards and formatting intact."
     )
 
     user_prompt = (

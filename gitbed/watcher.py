@@ -51,14 +51,10 @@ def process_netlist_file(file_path: str) -> Optional[dict]:
         logger.warning(f"No valid signal data parsed from '{file_path}'")
         return None
 
-    # 1. Ignore auto-generated nets (Net...) and passive components (Resistors, Capacitors, Diodes)
-    diffs = [
-        d for d in diffs
-        if not d["signal_name"].startswith("Net")
-        and not d["component"].startswith(("R", "C", "D"))
-    ]
+    # 1. Ignore auto-generated nets (Net...)
+    diffs = [d for d in diffs if not d["signal_name"].startswith("Net")]
 
-    logger.info(f"Parsed {len(diffs)} IC/Connector signal nets from EDA export")
+    logger.info(f"Parsed {len(diffs)} distinct net signals from EDA export")
 
     # Load current firmware pin assignments from GitHub
     baseline = _load_baseline_pins()
@@ -66,20 +62,17 @@ def process_netlist_file(file_path: str) -> Optional[dict]:
         logger.warning("No baseline firmware found on GitHub. Returning first parsed net.")
         return diffs[0] if diffs else None
 
-    # 2. Prioritize Microcontrollers (U) over Connectors (CN/J)
-    diffs.sort(key=lambda d: 0 if d["component"].startswith("U") else (1 if d["component"].startswith("CN") else 2))
-
-    # 3. Compare against baseline to find true IC pin changes
+    # 2. Compare against baseline to find true IC pin changes
     for d in diffs:
         signal = d["signal_name"]
         new_pin = d["new_pin"]
 
         if signal in baseline and baseline[signal] != new_pin:
             d["old_pin"] = baseline[signal]
-            logger.info(f"Detected real IC pin change: {signal} moved from {baseline[signal]} -> {new_pin} (component: {d['component']})")
+            logger.info(f"Detected real IC pin change: {signal} moved from {baseline[signal]} -> {new_pin} (primary: {d['component']}, total connected nodes: {len(d.get('connected_nodes', []))})")
             return d
 
-    logger.info(f"All IC/Connector nets match current firmware baseline ({len(baseline)} tracked signals). No firmware update required.")
+    logger.info(f"All net signals match current firmware baseline ({len(baseline)} tracked signals). No firmware update required.")
     return None
 
 

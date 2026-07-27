@@ -29,51 +29,65 @@ def parse_kicad_netlist(netlist_content: str) -> List[Dict[str, Any]]:
 
 
 def parse_altium_netlist(xml_content: str) -> List[Dict[str, Any]]:
-    """Parses Altium XML / Netlist export format to extract net signal assignments."""
-    diffs = []
+    """Parses Altium XML / Netlist export format to extract net signal assignments and full hardware topology."""
+    net_map: Dict[str, List[Dict[str, str]]] = {}
+
+    # 1. XML Parsing
     try:
         root = ET.fromstring(xml_content)
         for net in root.findall(".//Net"):
             net_name = net.get("Name") or net.findtext("Name", "")
-            node = net.find(".//Node")
-            if node is not None:
+            if not net_name or "GND" in net_name or "VCC" in net_name:
+                continue
+
+            nodes = []
+            for node in net.findall(".//Node"):
                 ref = node.get("ComponentRef", "U1")
                 pin = node.get("Pin", "1")
-                if net_name and "GND" not in net_name and "VCC" not in net_name:
-                    diffs.append({
-                        "component": ref,
-                        "signal_name": net_name,
-                        "new_pin": f"P{pin}" if not pin.startswith("P") else pin,
-                        "change_type": "ALTIUM_NETLIST_SYNC",
-                        "description": f"Parsed Altium net assignment for {net_name} on {ref} pin {pin}",
-                    })
+                nodes.append({"component": ref, "pin": pin})
+
+            if nodes:
+                net_map[net_name] = nodes
     except Exception as exc:
         logger.warning(f"Altium XML parse fallback to regex: {exc}")
-        # Regex fallback for Protel format: ( \n NetName \n Node1-Pin1 \n )
+        # 2. Regex fallback for Protel format: ( \n NetName \n Node1-Pin1 \n )
         protel_blocks = re.findall(r"\(\s*\n\s*([\w]+)\s*\n(.*?)\n\)", xml_content, re.DOTALL)
         for net_name, nodes_block in protel_blocks:
+            if not net_name or "GND" in net_name or "VCC" in net_name:
+                continue
             nodes = re.findall(r"([\w]+)-([\w]+)", nodes_block)
-            for ref, pin in nodes:
-                if net_name and "GND" not in net_name and "VCC" not in net_name:
-                    diffs.append({
-                        "component": ref,
-                        "signal_name": net_name,
-                        "new_pin": f"P{pin}" if not pin.startswith("P") else pin,
-                        "change_type": "ALTIUM_NETLIST_SYNC",
-                        "description": f"Parsed Protel entry for {net_name}",
-                    })
+            if nodes:
+                node_list = [{"component": ref, "pin": pin} for ref, pin in nodes]
+                net_map.setdefault(net_name, []).extend(node_list)
 
-        # Regex fallback for Report text format
-        matches = re.findall(r"Net\s+(\w+)\s+Node\s+(\w+)-(\w+)", xml_content)
-        for net_name, ref, pin in matches:
-            if net_name and "GND" not in net_name and "VCC" not in net_name:
-                diffs.append({
-                    "component": ref,
-                    "signal_name": net_name,
-                    "new_pin": f"P{pin}" if not pin.startswith("P") else pin,
-                    "change_type": "ALTIUM_NETLIST_SYNC",
-                    "description": f"Parsed Altium report entry for {net_name}",
-                })
+    diffs = []
+    for net_name, nodes in net_map.items():
+        # Deduplicate nodes
+        unique_nodes = []
+        seen = set()
+        for n in nodes:
+            key = (n["component"], n["pin"])
+            if key not in seen:
+                seen.add(key)
+                unique_nodes.append(n)
 
-    logger.info(f"Parsed {len(diffs)} signal nets from Altium netlist data")
+        # Select primary component: prefer IC/MCU ('U'/'IC'), then Connector ('CN'/'J'), then first
+        ic_nodes = [n for n in unique_nodes if n["component"].startswith("U") or n["component"].startswith("IC")]
+        cn_nodes = [n for n in unique_nodes if n["component"].startswith("CN") or n["component"].startswith("J")]
+
+        primary = ic_nodes[0] if ic_nodes else (cn_nodes[0] if cn_nodes else unique_nodes[0])
+        pin_str = primary["pin"]
+        new_pin = f"P{pin_str}" if not pin_str.startswith("P") else pin_str
+
+        diffs.append({
+            "signal_name": net_name,
+            "primary_component": primary["component"],
+            "component": primary["component"],
+            "new_pin": new_pin,
+            "connected_nodes": unique_nodes,
+            "change_type": "ALTIUM_NETLIST_SYNC",
+            "description": f"Parsed Altium net '{net_name}' (Primary: {primary['component']} pin {primary['pin']}, total nodes: {len(unique_nodes)})",
+        })
+
+    logger.info(f"Parsed {len(diffs)} distinct net signals from Altium netlist data")
     return diffs
