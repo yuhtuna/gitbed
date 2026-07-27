@@ -1,5 +1,6 @@
 import logging
 import os
+import re
 import time
 from typing import Callable, Optional
 
@@ -8,8 +9,30 @@ from gitbed.parsers import parse_altium_netlist, parse_kicad_netlist
 logger = logging.getLogger(__name__)
 
 
+def _load_baseline_pins() -> dict:
+    """Fetches pin_config.h from the target GitHub repo and extracts current pin assignments."""
+    try:
+        from gitbed.utils import fetch_github_file, get_default_token
+        token = os.environ.get("GITHUB_TOKEN") or get_default_token()
+        repo = os.environ.get("GITHUB_REPO", "")
+        if not token or not repo:
+            return {}
+        code = fetch_github_file(repo, token, "pin_config.h")
+        # Parse lines like: #define INA_SDA_PIN P4
+        pins = {}
+        for m in re.finditer(r"#define\s+(\w+)_PIN\s+(P\w+)", code):
+            signal = m.group(1)  # e.g. INA_SDA
+            pin = m.group(2)     # e.g. P4
+            pins[signal] = pin
+        logger.info(f"Loaded {len(pins)} baseline pin assignments from GitHub: {pins}")
+        return pins
+    except Exception as exc:
+        logger.warning(f"Could not load baseline pins from GitHub: {exc}")
+        return {}
+
+
 def process_netlist_file(file_path: str) -> Optional[dict]:
-    """Reads and parses an EDA netlist file (Altium XML/RPT or KiCad .net)."""
+    """Reads and parses an EDA netlist file, then compares against GitHub baseline to find real changes."""
     if not os.path.exists(file_path):
         logger.error(f"Netlist file '{file_path}' not found.")
         return None
@@ -17,24 +40,35 @@ def process_netlist_file(file_path: str) -> Optional[dict]:
     with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
         content = f.read()
 
+    diffs = []
     lower_path = file_path.lower()
     if lower_path.endswith(".xml") or "Altium" in content or "<Netlist" in content or (lower_path.endswith(".net") and "(export" not in content):
         diffs = parse_altium_netlist(content)
-        # Filter for demo signals, ignoring passive components (Resistors/Capacitors)
-        demo_diffs = [d for d in diffs if d['signal_name'] in ['INA_SDA', 'ESC_EN', 'STATUS_LED'] and not d['component'].startswith(('R', 'C'))]
-        if demo_diffs:
-            logger.info(f"Parsed Altium netlist '{file_path}': found signal '{demo_diffs[0]['signal_name']}' -> '{demo_diffs[0]['new_pin']}'")
-            return demo_diffs[0]
-        else:
-            logger.info(f"Parsed {len(diffs)} nets from Altium, but none match tracked firmware signals (e.g. INA_SDA, ESC_EN). No firmware update required.")
-            return None
     elif lower_path.endswith(".net") and "(export" in content:
         diffs = parse_kicad_netlist(content)
-        if diffs:
-            logger.info(f"Parsed KiCad netlist '{file_path}': found signal '{diffs[0]['signal_name']}' -> '{diffs[0]['new_pin']}'")
-            return diffs[0]
 
-    logger.warning(f"No valid signal changes parsed from '{file_path}'")
+    if not diffs:
+        logger.warning(f"No valid signal data parsed from '{file_path}'")
+        return None
+
+    logger.info(f"Parsed {len(diffs)} total nets from EDA export")
+
+    # Load current firmware pin assignments from GitHub
+    baseline = _load_baseline_pins()
+    if not baseline:
+        logger.warning("No baseline firmware found on GitHub. Returning first parsed net.")
+        return diffs[0]
+
+    # Compare: find nets where the pin ACTUALLY changed vs the firmware
+    for d in diffs:
+        signal = d["signal_name"]
+        new_pin = d["new_pin"]
+        if signal in baseline and baseline[signal] != new_pin:
+            d["old_pin"] = baseline[signal]
+            logger.info(f"Detected real pin change: {signal} moved from {baseline[signal]} -> {new_pin} (component: {d['component']})")
+            return d
+
+    logger.info(f"All {len(diffs)} parsed nets match the current firmware baseline. No firmware update required.")
     return None
 
 
