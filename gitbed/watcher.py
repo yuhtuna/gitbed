@@ -59,16 +59,26 @@ def process_netlist_file(file_path: str) -> Optional[dict]:
         logger.warning("No baseline firmware found on GitHub. Returning first parsed net.")
         return diffs[0]
 
+    # Deterministic signal aliases for Altium auto-generated net names
+    NET_ALIASES = {
+        "NetR13_1": "INA_SDA",
+        "NetR12_1": "INA_SCL",
+        "NetR8_1": "ESC_EN",
+    }
+
     # Compare: find nets where the pin ACTUALLY changed vs the firmware
     # We sort to prioritize Microcontroller pins (U) over Connector pins (CN) so the PR reflects the main IC pin
     diffs.sort(key=lambda d: 0 if d["component"].startswith("U") else (1 if d["component"].startswith("CN") else 2))
 
     for d in diffs:
-        signal = d["signal_name"]
+        raw_signal = d["signal_name"]
+        signal = NET_ALIASES.get(raw_signal, raw_signal)
+        d["signal_name"] = signal  # Normalize signal name
         new_pin = d["new_pin"]
+
         if signal in baseline and baseline[signal] != new_pin:
             d["old_pin"] = baseline[signal]
-            logger.info(f"Detected real pin change: {signal} moved from {baseline[signal]} -> {new_pin} (component: {d['component']})")
+            logger.info(f"Detected real pin change: {signal} ({raw_signal}) moved from {baseline[signal]} -> {new_pin} (component: {d['component']})")
             return d
 
     logger.info(f"All {len(diffs)} parsed nets match the current firmware baseline. No firmware update required.")
