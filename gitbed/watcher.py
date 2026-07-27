@@ -60,6 +60,9 @@ def process_netlist_file(file_path: str) -> Optional[dict]:
         return diffs[0]
 
     # Compare: find nets where the pin ACTUALLY changed vs the firmware
+    # We sort to prioritize Microcontroller pins (U) over Connector pins (CN) so the PR reflects the main IC pin
+    diffs.sort(key=lambda d: 0 if d["component"].startswith("U") else (1 if d["component"].startswith("CN") else 2))
+
     for d in diffs:
         signal = d["signal_name"]
         new_pin = d["new_pin"]
