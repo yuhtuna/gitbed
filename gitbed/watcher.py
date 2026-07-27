@@ -51,25 +51,90 @@ def process_netlist_file(file_path: str) -> Optional[dict]:
         logger.warning(f"No valid signal data parsed from '{file_path}'")
         return None
 
-    # 1. Ignore auto-generated nets (Net...)
-    diffs = [d for d in diffs if not d["signal_name"].startswith("Net")]
-
-    logger.info(f"Parsed {len(diffs)} distinct net signals from EDA export")
-
     # Load current firmware pin assignments from GitHub
     baseline = _load_baseline_pins()
     if not baseline:
         logger.warning("No baseline firmware found on GitHub. Returning first parsed net.")
         return diffs[0] if diffs else None
 
-    # 2. Compare against baseline to find true IC pin changes
+    # Resolve auto-generated net names (e.g. NetR13_1) back to real signal names
+    # by checking if any IC pin in the baseline has changed
     for d in diffs:
         signal = d["signal_name"]
         new_pin = d["new_pin"]
 
-        if signal in baseline and baseline[signal] != new_pin:
-            d["old_pin"] = baseline[signal]
-            logger.info(f"Detected real IC pin change: {signal} moved from {baseline[signal]} -> {new_pin} (primary: {d['component']}, total connected nodes: {len(d.get('connected_nodes', []))})")
+        # If the signal already has a proper name (not auto-generated), check directly
+        if not signal.startswith("Net"):
+            if signal in baseline and baseline[signal] != new_pin:
+                d["old_pin"] = baseline[signal]
+                logger.info(f"Detected pin change: {signal} moved from {baseline[signal]} -> {new_pin} (primary: {d['component']})")
+                return d
+        else:
+            # Auto-generated net name: find which baseline signal this IC pin USED to belong to
+            # by checking if any tracked signal now has a different pin
+            for base_signal, base_pin in baseline.items():
+                if base_pin != new_pin:
+                    # Check: does this net connect to the same IC component type?
+                    # This is a candidate — but we need more evidence
+                    continue
+
+            # Simply expose with the auto-generated name for now; the baseline diff below will catch it
+            pass
+
+    # Final pass: check if any baseline signal is MISSING entirely from the netlist
+    # This means the net label detached — find the auto-generated net that took its place
+    named_signals = {d["signal_name"] for d in diffs if not d["signal_name"].startswith("Net")}
+    auto_nets = [d for d in diffs if d["signal_name"].startswith("Net")]
+
+    missing_signals = [(sig, pin) for sig, pin in baseline.items() if sig not in named_signals]
+
+    if missing_signals:
+        logger.info(f"Baseline signals missing from netlist (label detached): {[s for s, _ in missing_signals]}")
+
+    # Phase 1: Pair each missing signal with an auto-net that has the SAME pin (= label detached, no change)
+    # This also tells us which IC component the signal was on
+    signal_to_ic = {}  # maps baseline signal -> IC component designator
+    used_auto = set()
+    for base_signal, base_pin in missing_signals:
+        for i, d in enumerate(auto_nets):
+            if i not in used_auto and d["new_pin"] == base_pin:
+                used_auto.add(i)
+                signal_to_ic[base_signal] = d["component"]
+                logger.info(f"Label detached but pin unchanged: {base_signal} still on {base_pin} (auto-named as {d['signal_name']}, IC: {d['component']})")
+                break
+
+    # Phase 2: For missing signals that had NO same-pin match, find the auto-net with a DIFFERENT pin
+    # Prefer auto-nets on the same IC component as the signal's known IC
+    for base_signal, base_pin in missing_signals:
+        if base_signal in signal_to_ic:
+            continue  # Already matched (unchanged)
+
+        # Try to infer which IC this signal belongs to from other signals on the same IC
+        # e.g. INA_SDA was on U2 because INA_SCL is also on U2
+        expected_ic = None
+        for other_sig, other_ic in signal_to_ic.items():
+            # Signals with similar prefixes (INA_SDA/INA_SCL) are usually on the same IC
+            prefix = base_signal.rsplit("_", 1)[0]  # e.g. "INA" from "INA_SDA"
+            if other_sig.startswith(prefix):
+                expected_ic = other_ic
+                break
+
+        # Find the auto-net with a different pin, preferring the expected IC
+        best_match = None
+        for i, d in enumerate(auto_nets):
+            if i not in used_auto and d["new_pin"] != base_pin:
+                if expected_ic and d["component"] == expected_ic:
+                    best_match = (i, d)
+                    break  # Exact IC match — this is definitely the right one
+                elif best_match is None:
+                    best_match = (i, d)  # Fallback
+
+        if best_match:
+            i, d = best_match
+            used_auto.add(i)
+            d["signal_name"] = base_signal
+            d["old_pin"] = base_pin
+            logger.info(f"Resolved detached net label: {base_signal} moved from {base_pin} -> {d['new_pin']} (primary: {d['component']})")
             return d
 
     logger.info(f"All net signals match current firmware baseline ({len(baseline)} tracked signals). No firmware update required.")
