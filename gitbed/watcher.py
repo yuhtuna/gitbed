@@ -91,10 +91,11 @@ def process_netlist_file(file_path: str) -> Optional[dict]:
     if missing_signals:
         logger.info(f"Baseline signals missing from netlist (label detached): {[s for s, _ in missing_signals]}")
 
-    # Phase 1: Pair each missing signal with an auto-net that has the SAME pin (= label detached, no change)
-    # This also tells us which IC component the signal was on
-    signal_to_ic = {}  # maps baseline signal -> IC component designator
+    # Phase 1: Initialize signal_to_ic map from ALL named signals currently in the netlist
+    # (e.g. INA_SCL is on U2, so INA bus signals belong to U2)
+    signal_to_ic = {d["signal_name"]: d["component"] for d in diffs if not d["signal_name"].startswith("Net")}
     used_auto = set()
+
     for base_signal, base_pin in missing_signals:
         for i, d in enumerate(auto_nets):
             if i not in used_auto and d["new_pin"] == base_pin:
@@ -104,30 +105,28 @@ def process_netlist_file(file_path: str) -> Optional[dict]:
                 break
 
     # Phase 2: For missing signals that had NO same-pin match, find the auto-net with a DIFFERENT pin
-    # Prefer auto-nets on the same IC component as the signal's known IC
+    # Prefer auto-nets on the same IC component as the signal's known/inferred IC
     for base_signal, base_pin in missing_signals:
-        if base_signal in signal_to_ic:
-            continue  # Already matched (unchanged)
+        # If this signal was matched to a same-pin auto-net in Phase 1, skip it
+        if base_signal in signal_to_ic and any(d["new_pin"] == base_pin for i, d in enumerate(auto_nets) if i in used_auto):
+            continue
 
-        # Try to infer which IC this signal belongs to from other signals on the same IC
-        # e.g. INA_SDA was on U2 because INA_SCL is also on U2
+        # Infer expected IC component for this signal (e.g. INA_SDA -> INA_SCL is on U2)
         expected_ic = None
+        prefix = base_signal.rsplit("_", 1)[0]
         for other_sig, other_ic in signal_to_ic.items():
-            # Signals with similar prefixes (INA_SDA/INA_SCL) are usually on the same IC
-            prefix = base_signal.rsplit("_", 1)[0]  # e.g. "INA" from "INA_SDA"
-            if other_sig.startswith(prefix):
+            if other_sig.startswith(prefix) and other_sig != base_signal:
                 expected_ic = other_ic
                 break
 
-        # Find the auto-net with a different pin, preferring the expected IC
         best_match = None
         for i, d in enumerate(auto_nets):
             if i not in used_auto and d["new_pin"] != base_pin:
                 if expected_ic and d["component"] == expected_ic:
                     best_match = (i, d)
-                    break  # Exact IC match — this is definitely the right one
+                    break  # Exact IC match!
                 elif best_match is None:
-                    best_match = (i, d)  # Fallback
+                    best_match = (i, d)
 
         if best_match:
             i, d = best_match
