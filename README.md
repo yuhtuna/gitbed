@@ -1,65 +1,14 @@
-<div align="center">
-
 # GitBed
 
-**Automated Hardware-to-Software CI/CD Agent for Enterprise Embedded Systems**
+Automated hardware-to-software CI/CD agent for Enterprise.
 
-[![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](LICENSE)
-[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
-[![LangGraph](https://img.shields.io/badge/Agent-LangGraph-orange.svg)](https://github.com/langchain-ai/langgraph)
-[![Security: Zero-Trust](https://img.shields.io/badge/Security-Zero--Trust_On--Prem-green.svg)](#security-and-privacy-model)
-
-*GitBed bridges the gap between EDA hardware design and firmware engineering by automatically detecting netlist changes in Altium Designer and KiCad, verifying hardware constraints, and submitting atomic, multi-file Pull Requests to GitHub.*
-
-</div>
+GitBed monitors Altium Designer and KiCad netlist exports and automatically generates verified C++ Pull Requests to keep firmware tightly synchronized with hardware revisions.
 
 ---
 
-## Key Capabilities
+## Architecture and System Flow
 
-| Capability | Technical Mechanism | Enterprise Benefit |
-|---|---|---|
-| **Zero-Trust On-Premise Parsing** | Local file watcher and net topology engine (`watcher.py`, `parsers.py`) | Proprietary CAD schematics and PCB layouts remain 100% on-premise. |
-| **Multi-File HAL Synchronization** | Atomic patch bundle generator (`hal_sync.py`) | Synchronizes C++ macros, Zephyr/Linux DeviceTree overlays, and HAL driver code. |
-| **Self-Healing Reflection Loop** | Headless `g++` compilation + Pin Conflict Guard | Detects double-allocated pins and syntax errors, self-healing before PR creation. |
-| **Deterministic Bridge Cache** | Rule caching engine (`bridge.py`) | Executes known reassignment rules with **0ms latency and $0 AI API cost**. |
-
----
-
-## Example Pull Request Output
-
-When a hardware engineer re-routes a trace in Altium or KiCad, GitBed generates a verified multi-file Pull Request:
-
-```diff
-# pin_config.h (C/C++ Macro Header)
-  // Kame_PDB Hardware Configurations
-  #define VCC3SW_PIN P1
-  #define ESC_EN_PIN P12
-- #define INA_SDA_PIN P4
-+ #define INA_SDA_PIN P6
-  #define INA_SCL_PIN P5
-
-# boards/app.overlay (Zephyr RTOS DeviceTree Overlay)
-  leds {
-      compatible = "gpio-leds";
--     ina_sda_led: ina_sda { gpios = <&gpio4 7 GPIO_ACTIVE_HIGH>; };
-+     ina_sda_led: ina_sda { gpios = <&gpio6 7 GPIO_ACTIVE_HIGH>; };
-  };
-
-# src/gpio_driver.cpp (GPIO Driver Initialization)
-  void init_gpio_ina_sda() {
-      GPIO_InitTypeDef gpio_init = {0};
--     gpio_init.Pin = INA_SDA_PIN; // P4
-+     gpio_init.Pin = INA_SDA_PIN; // P6
-      HAL_GPIO_Init(GPIOB, &gpio_init);
-  }
-```
-
----
-
-## Architecture and Execution Flow
-
-GitBed models its pipeline as a stateful, directed graph using LangGraph. Netlist changes are parsed locally, compared against the baseline firmware on GitHub, and processed through a multi-stage verification loop.
+The GitBed execution pipeline is structured as a stateful, directed graph using LangGraph. It incorporates an automated self-healing reflection loop to catch syntax errors and hardware pin collisions before opening pull requests.
 
 ```mermaid
 flowchart TD
@@ -117,103 +66,85 @@ flowchart TD
 
 ---
 
-## Installation & Quickstart
-
-### Prerequisites
-- Python 3.10+
-- `g++` (for local headless compiler verification)
-
-### Setup
+## Quickstart
 
 ```bash
-# Clone the repository
 git clone https://github.com/yuhtuna/gitbed.git
 cd gitbed
 
-# Install Python dependencies
 pip install -r requirements.txt
 
-# Configure environment variables
+# Copy environment variables template and configure your keys
 cp .env.example .env
-```
 
-Edit `.env` to supply your credentials:
-
-```env
-OPENAI_API_KEY="your-openai-api-key"
-GITHUB_TOKEN="your-github-personal-access-token"
-GITHUB_REPO="your-org/firmware-repo"
-```
-
-### Running a Standalone Mock Sync
-
-```bash
+# Run the standard pipeline on a mock hardware diff
 python gitbed_engine.py
 ```
 
 ---
 
-## Live Watcher Deployment
+## Live Watcher Workflow
 
-To run GitBed as an automated background service monitoring live EDA exports:
+To run GitBed as a background service mirroring an Enterprise environment:
 
-```bash
-python gitbed_engine.py --watch "C:/Users/Public/Documents/Altium/Sample - Kame_PDB/Project Outputs"
-```
-
-### Workflow
-1. Modify a net or pin assignment in Altium Designer or KiCad.
-2. Save the schematic (`Ctrl+S`) and export the netlist (**Design -> Netlist For Project -> Protel / XML**).
-3. GitBed automatically detects the exported file, extracts net topology, verifies hardware constraints, and opens a GitHub Pull Request.
-
----
-
-## Integration Methods
-
-| Integration Method | Configuration | Environment Target |
-|---|---|---|
-| **Altium OutJob (Recommended)** | Add a **Netlist Outputs -> Export Netlist** generator targeting watched folder | Local Workstation / Windows |
-| **Altium Native Script Hook** | Add `altium/GitBed_Export_Hook.py` to Altium Scripts directory | Local Workstation (1-Click) |
-| **Cloud Webhooks** | Configure Webhook on `Project Release` event targeting GitBed API endpoint | Altium 365 / Enterprise Cloud |
+1. Configure your target GitHub repository in `.env`:
+   ```env
+   GITHUB_REPO="your-org/firmware-repo"
+   ```
+2. Start the GitBed Live Watcher on your EDA project output directory:
+   ```bash
+   python gitbed_engine.py --watch "C:/Users/Public/Documents/Altium/Sample - Kame_PDB/Project Outputs"
+   ```
+3. Modify a pin assignment in Altium Designer or KiCad.
+4. Export the netlist (**Design -> Netlist For Project -> Protel / XML**).
+5. GitBed automatically detects the file, parses net topology, compiles C++ patches headlessly, checks for hardware pin collisions, and submits a multi-file Pull Request on GitHub.
 
 ---
 
-## Security and Privacy Model
+## EDA Integration Modes
 
-GitBed is designed around a **Zero-Trust Security Boundary**:
+GitBed supports three integration modes for Altium Designer and KiCad:
 
-- **On-Premise CAD Processing:** Raw schematic binary files (`.SchDoc`, `.kicad_sch`), PCB layout files (`.PcbDoc`), and manufacturing outputs remain entirely on local hardware.
-- **Minimal Payload Exposure:** Only anonymized net topology payloads (`{"signal": "INA_SDA", "new_pin": "P6"}`) and the specific header file (`pin_config.h`) interact with verification logic.
-- **Air-Gapped LLM Compatibility:** The engine supports self-hosted LLMs (via `Ollama`, `vLLM`, or Azure OpenAI Zero-Data-Retention instances) for air-gapped defense and aerospace environments.
+### 1. Automated OutJob Export
+Add a **Netlist Outputs -> Export Netlist** generator to your Altium OutJob file (`.OutJob`) targeting your watched directory. Every save and export automatically updates firmware.
+
+### 2. Altium Native Script Hook
+Add `altium/GitBed_Export_Hook.py` to your Altium Designer Scripts directory. Run `SyncWithGitBed` inside Altium Designer to trigger instant netlist extraction and PR creation.
+
+### 3. Cloud Webhooks
+For Altium 365 cloud workspaces, configure Webhook notifications on `Project Release` or `Netlist Modified` events to trigger GitBed's CI/CD pipeline headlessly.
 
 ---
 
-## Core Pipeline Architecture
+## Core Pipeline Components
 
-### 1. Watcher & Net Topology Parser (`watcher.py`, `parsers.py`)
-Parses netlist structures across multiple EDA formats (Altium XML, Protel `.NET`, KiCad S-expressions). Groups all connected component nodes per net (`connected_nodes`) to build the complete schematic topology graph.
+### 1. Zero-Trust Local Watcher & Net Topology Parser (`watcher.py`, `parsers.py`)
+- Raw CAD schematics and PCB layout files remain 100% on-premise.
+- Extracts full net topology across all connected ICs and passives (`connected_nodes`).
+- Compares netlist output against GitHub baseline code to isolate true IC pin changes.
 
 ### 2. Self-Synthesizing Bridge Cache Engine (`bridge.py`)
-Intercepts pin reassignment requests. If a rule exists in `.gitbed_rules.json`, GitBed executes a local regex patch with **0ms latency and $0 AI API cost**. Successful LLM patches automatically synthesize and cache new rules for future executions.
+- Intercepts pin reassignment requests and attempts deterministic local regex execution.
+- If a matching rule exists, it executes instantly with 0ms latency and $0 AI API cost.
+- Automatically caches new rules upon successful verification.
 
-### 3. Verification & Hardware Pin Conflict Guard (`conflict_checker.py`, `utils.py`)
-Executes a three-stage validation pipeline:
-1. **Syntax Check:** Headless compilation via `g++ -fsyntax-only`.
-2. **Specification Check:** Confirms requested pin declarations are explicitly present in the patch.
-3. **Hardware Pin Conflict Guard:** Scans the pin allocation matrix to prevent double-allocating pins across peripherals.
+### 3. Verification & Hardware Pin Conflict Checker (`conflict_checker.py`, `utils.py`)
+- **Syntax Check:** Headless C++ compilation via `g++ -fsyntax-only`.
+- **Specification Check:** Ensures newly assigned pins are explicitly present in the patch.
+- **Hardware Conflict Guard:** Cross-checks the pin assignment matrix to prevent double-allocating pins or creating bus collisions.
 
 ### 4. Multi-File HAL & DeviceTree Sync (`hal_sync.py`)
-Synchronizes changes across the entire firmware stack:
-- `pin_config.h` (C/C++ Macro Header Constants)
-- `boards/app.overlay` (Zephyr / Linux RTOS DeviceTree Overlay)
-- `src/gpio_driver.cpp` (HAL Initialization Driver Code)
+Synchronizes hardware modifications across three layers of the firmware stack:
+1. `pin_config.h` — C/C++ Macro Header Constants
+2. `boards/app.overlay` — Zephyr / Linux RTOS DeviceTree Hardware Overlay
+3. `src/gpio_driver.cpp` — Hardware Abstraction Layer Initialization Driver
 
 ### 5. Self-Healing Reflection Router (`graph.py`, `nodes.py`)
-If a syntax error or pin collision occurs during verification, the router redirects execution back to the generation node with full compiler diagnostics included in the LLM context, allowing the agent to self-heal.
+If a syntax error or pin collision occurs during verification, the router redirects execution back to the generation node with full compiler diagnostics included in the context, allowing the agent to self-heal.
 
 ---
 
-## Repository Layout
+## Repository Structure
 
 ```text
 gitbed/
@@ -240,7 +171,7 @@ gitbed/
 
 ## Testing
 
-Execute the automated unit and integration test suite:
+Execute the automated test suite using pytest:
 
 ```bash
 pytest -v
@@ -250,4 +181,4 @@ pytest -v
 
 ## License
 
-GitBed is licensed under the GNU Affero General Public License v3.0 (AGPL-3.0). See the `LICENSE` file for details.
+This software is licensed under the GNU Affero General Public License v3.0 (AGPL-3.0). See the `LICENSE` file for full text.
