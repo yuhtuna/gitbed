@@ -54,7 +54,7 @@ def run_pipeline_for_diff(diff_data: dict):
         "pr_url": "",
     }
 
-    logger.info("Starting GitBed agent pipeline")
+    logger.info("Starting GitBed agent pipeline (Powered by BedBridge™ Engine)")
     final_state = app.invoke(initial_state)
 
     pr_url = final_state.get("pr_url")
@@ -65,7 +65,7 @@ def run_pipeline_for_diff(diff_data: dict):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="GitBed: Automated Hardware Netlist Sync & Firmware Patch Engine")
+    parser = argparse.ArgumentParser(description="GitBed: Automated Hardware Netlist Sync & Firmware Patch Engine (BedBridge™ Engine)")
     parser.add_argument("--altium", type=str, help="Path to Altium Designer XML or report netlist file")
     parser.add_argument("--kicad", type=str, help="Path to KiCad .net netlist file")
     parser.add_argument("--watch", type=str, help="Directory path to monitor for Altium/KiCad exports")

@@ -1,6 +1,6 @@
 # GitBed
 
-> Automated Hardware-to-Software CI/CD Agent. Bridge the gap between EDA schematics and firmware codebases.
+> Automated Hardware-to-Software CI/CD Agent powered by the **BedBridge™ Engine**. Bridge the gap between EDA schematics and firmware codebases.
 
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
@@ -11,8 +11,11 @@ GitBed monitors **Altium Designer** and **KiCad** netlist exports and automatica
 
 ---
 
-## Key Features
+## BedBridge™ Core Engine
 
+The **BedBridge™ Engine** is GitBed's underlying hardware-to-code translation layer. It extracts full net topologies from EDA exports and maps physical wire reassignments directly to firmware codebases via verified Pull Requests.
+
+Key capabilities of the BedBridge™ Engine:
 - **Automated Netlist Drift Detection:** Watches EDA export directories for netlist updates (`.NET`, `.xml`, `.rpt`).
 - **Multi-File Stack Synchronization:** Simultaneously updates `pin_config.h`, Zephyr `boards/app.overlay`, and `src/gpio_driver.cpp`.
 - **Hardware Pin Conflict Guard:** Cross-checks MCU peripheral assignments to detect duplicate pins and prevent short circuits.
@@ -25,7 +28,7 @@ GitBed monitors **Altium Designer** and **KiCad** netlist exports and automatica
 
 ## System Architecture
 
-The GitBed execution pipeline is structured as a stateful, directed graph using **LangGraph**.
+The BedBridge™ execution pipeline is structured as a stateful, directed graph using **LangGraph**.
 
 ```mermaid
 graph TD
@@ -39,7 +42,7 @@ graph TD
         G_Repo["Firmware Repository"] -->|"Fetch pin_config.h Baseline"| D
     end
 
-    subgraph LangGraph["2. LangGraph Agent Engine"]
+    subgraph LangGraph["2. BedBridge Engine (LangGraph)"]
         D -->|"Pin Change Detected"| State["AgentState Init"]
         State --> Node_Gen["Node: generate_patch"]
         
@@ -80,7 +83,7 @@ graph TD
 
 ## Example Generated Patch
 
-When a hardware engineer moves `INA_SDA` from Pin 4 to Pin 6 in Altium, GitBed generates a verified 3-file Pull Request:
+When a hardware engineer moves `INA_SDA` from Pin 4 to Pin 6 in Altium, the BedBridge™ Engine generates a verified 3-file Pull Request:
 
 ### 1. C/C++ Header (`pin_config.h`)
 ```diff
@@ -202,7 +205,7 @@ gitbed/
 │   ├── nodes.py              # Agent node logic & LLM prompts
 │   ├── watcher.py            # EDA output directory watcher
 │   └── graph.py              # LangGraph state machine assembly
-├── tests/                    # Unit and integration test suite
+├── tests/                    # Automated unit and integration test suite
 ├── gitbed_engine.py          # Main application entry point
 └── LICENSE                   # AGPL-3.0 Open-Source License
 ```
