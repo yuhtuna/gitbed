@@ -28,7 +28,7 @@ class TestEDAnetlistParsers(unittest.TestCase):
         self.assertEqual(diffs[0]["new_pin"], "P7")
 
     def test_parse_altium_text_netlist_fallback(self):
-        altium_text = "Net STATUS_LED Node U1-7"
+        altium_text = "(\n STATUS_LED\n U1-7\n)"
         diffs = parse_altium_netlist(altium_text)
         self.assertEqual(len(diffs), 1)
         self.assertEqual(diffs[0]["signal_name"], "STATUS_LED")
